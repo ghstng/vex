@@ -10,18 +10,21 @@ class Vex:
     self.output_bits = max(64, min(output_bits, 256))
     self.prime_count = max(100, min(prime_count, 1000))
     self.count = min(self.prime_count, 1000)
-    self.indices = self._generate_primes(self.prime_count, key)
     self.output_size = max(2, self.output_bits // 32)
     table_size = max(2, 8 if output_bits <= 256 else 16)
     self.map_table = ((c_uint32 * table_size * table_size) * self.output_size)()
+    self.indices = self._generate_primes(self.prime_count, key)
     key_val = sum(key) if key else 0
     for j in range(self.output_size):
       for i in range(table_size):
         for k in range(table_size):
-          self.map_table[j][i][k] = c_uint32(pow(self.indices[i % self.count], (k + j + 1) % self.count + 1, 0xFFFFFFFF) ^ ((i * self.indices[(k + j + 1) % self.count]) ^ (i << (7 + j)) ^ (k >> (2 + j)) ^ (self.indices[i % self.count] % 0xFFFF) ^ (k * (17 + j * 2)) ^ key_val | 1))
+          idx = c_uint32(pow(self.indices[i % self.count], (k + j + 1) % self.count + 1, 0xFFFFFFFF))
+          mix = idx.value ^ (i * self.indices[(k + j + 1) % self.count].value) ^ (i << (7 + j)) ^ (k >> (2 + j))
+          mix = mix ^ (self.indices[i % self.count].value & 0xFFFF) ^ (k * (17 + j * 2)) ^ key_val
+          self.map_table[j][i][k] = c_uint32(mix | 1)
 
-  def _generate_primes(self, count: int, seed: Optional[bytes] = None) -> List[int]:
-    seed_val = sum(seed) if seed else 0
+  def _generate_primes(self, count: int, seed: Optional[bytes] = None) -> List[c_uint32]:
+    seed_val = sum(b * (i + 1) for i, b in enumerate(seed)) if seed else 0  # Weighted seed
     wheel = [2, 3, 5, 7, 11, 13, 17, 19, 23]
     primes = list(wheel)
     n = 29
@@ -36,7 +39,7 @@ class Vex:
       n += 2
     if seed_val:
       for i in range(len(primes)):
-        primes[i] = primes[(i + seed_val) % len(primes)]
+        primes[i] = primes[(i ^ seed_val) % len(primes)]  # XOR-based shuffle
     return (c_uint32 * len(primes))(*primes[:count])
 
   def read(self, index: int) -> float:
@@ -45,9 +48,15 @@ class Vex:
   def map_data(self, data: bytes) -> List[c_uint32]:
     if not data:
       return (c_uint32 * self.output_size)(*[0] * self.output_size)
-    idx0 = data[0] & 0x07
-    idx1 = (data[1] & 0x07) if len(data) > 1 else idx0
-    return (c_uint32 * self.output_size)(*[self.map_table[i][idx0][idx1] for i in range(self.output_size)])
+    table_size = max(2, 8 if self.output_bits <= 256 else 16)
+    idx0 = sum(data) & (table_size - 1)  # Multi-byte mixing
+    idx1 = sum(b * (i + 1) for i, b in enumerate(data)) & (table_size - 1)  # Weighted mixing
+    result = [self.map_table[i][idx0][idx1] for i in range(self.output_size)]
+    for _ in range(self.nesting_depth):
+      idx0 = (result[0].value ^ sum(data)) & (table_size - 1)  # Iterative mixing
+      idx1 = (result[-1].value ^ sum(b * (i + 1) for i, b in enumerate(data))) & (table_size - 1)
+      result = [c_uint32(self.map_table[i][idx0][idx1].value ^ result[i].value) for i in range(self.output_size)]
+    return (c_uint32 * self.output_size)(*result)
 
   def validate(self, data: bytes, expected: List[c_uint32]) -> bool:
     computed = self.map_data(data)
