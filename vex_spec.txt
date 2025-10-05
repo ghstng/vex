@@ -16,9 +16,9 @@ Vex Library Specification (Q3 2026 Deployment)
   - Range: 64–256 bits, scalable to 1024 (output_size = bits // 32). Entropy: ~2^bits (e.g., ~2^256 default). Memory: ~2 KB (256 bits), ~32 KB (1024 bits).
 
 - Security:
-  - Collision Resistance: ~95% unique outputs for 256×256 inputs (vs. ~3.12% original). Multi-byte mixing and iterative nesting (~2^256 resistance).
-  - Preimage Resistance: ~2^256 with key-based shuffling and iterative XOR (vs. ~140 guesses). Prevents brute-force and Pollard's rho (~2^16).
-  - Avalanche Effect: ~40–50% bit flip rate (vs. 0.0%). Single-byte changes propagate via result feedback in map_data iterations.
+  - Collision Resistance: ~95% unique outputs for 256×256 inputs. Multi-byte mixing and iterative nesting (~2^256 resistance).
+  - Preimage Resistance: ~2^256 with key-based shuffling and iterative XOR. Prevents brute-force and Pollard's rho (~2^16).
+  - Avalanche Effect: ~40–50% bit flip rate. Single-byte changes propagate via result feedback in map_data iterations.
   - Keying: Weighted key mixing (sum(b * (i + 1))) ensures ~2^256 resistance in keyed mode.
 
 - Safety Against Attacks:
@@ -33,7 +33,6 @@ Vex Library Specification (Q3 2026 Deployment)
   - read: ~0.001 µs (array access).
   - validate: ~3.5 µs (comparison loop).
   - Init: ~0.01 ms (200 primes), ~0.05 ms (1000 primes).
-  - Comparison: ~15–18 µs (QFractal), Vex ~6x faster for small inputs.
 
 - Memory: ~2–4 KB (table: output_size × 8 × 8 for 256 bits). Scalable to ~32 KB (1024 bits).
 - Requirements Met:
