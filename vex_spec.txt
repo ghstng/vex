@@ -1,5 +1,5 @@
 # docs/vex_spec.txt
-Vex Library Specification (Q3 2026 Deployment)
+Vex Library Specification
 
 - Overview:
   Standalone cryptographic library derived from QFractal, optimized for deterministic data mapping with prime-based tables. No external dependencies, low-latency (~2.92–22 µs on i5), ~2–4 KB memory, ~0.01 ms init. Supports secure transformations for wave-based and telemetry applications.
