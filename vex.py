@@ -12,12 +12,16 @@ class Vex:
     self.output_size = max(2, self.output_bits // 32)
     table_size = 8
     self.prime_table = ((c_uint32 * table_size * table_size) * self.output_size)()
-    key_val = sum(key)
+    key_val = sum((b ^ (b << (i % 4))) * (i + 1) ^ 0x9E3779B9 for i, b in enumerate(key)) & 0xFFFFFFFF
     indices = self._generate_primes()
+
+    def key_callback(i: int, j: int, k: int) -> int:
+      return (key_val ^ (0x9E3779B9 * j) ^ (0xBF58476D * i) ^ (0xC6EF372F * k)) & 0xFFFFFFFF
+
     for j in range(self.output_size):
       for i in range(table_size):
         for k in range(table_size):
-          self.prime_table[j][i][k] = c_uint32((indices[i % self.prime_count] ^ ((indices[(k + j + 1) % self.prime_count] ^ (i << (7 + j)) ^ (k >> (2 + j)) ^ (indices[i % self.prime_count] & 65535) ^ (k * (17 + j * 2))) ^ key_val)) | 1)
+          self.prime_table[j][i][k] = c_uint32((indices[i % self.prime_count] ^ ((indices[(k + j + 1) % self.prime_count] ^ key_callback(i, j, k) ^ (indices[i % self.prime_count] & 65535) ^ (k * (17 + j * 2))))) | 1)
 
   def _generate_primes(self) -> List[int]:
     wheel = [2, 3, 5, 7, 11, 13, 17, 19, 23]
@@ -40,9 +44,17 @@ class Vex:
     if not data:
       return (c_uint32 * self.output_size)(*([0] * self.output_size))
     table_size = 8
-    idx0 = data[0] % table_size
-    idx1 = (data[1] % table_size) if len(data) > 1 else idx0
     result = (c_uint32 * self.output_size)()
+    key_sum = sum(b * (i + 1) << (i % 8) for i, b in enumerate(self.key)) & 0xFFFFFFFF
+
+    def byte_callback(j: int, i: int) -> int:
+      byte = data[j % len(data)]
+      return (byte ^ (byte << (i % 4)) ^ (byte >> (j % 4)) ^ (0x9E3779B9 * (i + j))) & 0xFFFFFFFF
+
     for i in range(self.output_size):
-      result[i] = self.prime_table[i][idx0][idx1]
+      byte_signal = sum(byte_callback(j, i) for j in range(len(data))) & 0xFFFFFFFF
+      idx0 = (byte_signal ^ key_sum ^ (0xBF58476D * i)) % table_size
+      idx1 = (byte_signal ^ key_sum ^ (0xC6EF372F * (i + 1))) % table_size
+      z = (byte_signal ^ key_sum ^ (0x9E3779B9 * i)) % table_size
+      result[i] = self.prime_table[i][idx0][idx1] ^ byte_signal ^ key_sum ^ (0x9E3779B9 * (i + 1))
     return result
