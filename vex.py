@@ -55,6 +55,6 @@ class Vex:
       byte_signal = sum(byte_callback(j, i) for j in range(len(data))) & 0xFFFFFFFF
       idx0 = (byte_signal ^ key_sum ^ (0xBF58476D * i)) % table_size
       idx1 = (byte_signal ^ key_sum ^ (0xC6EF372F * (i + 1))) % table_size
-      z = (byte_signal ^ key_sum ^ (0x9E3779B9 * i)) % table_size
+      # z = (byte_signal ^ key_sum ^ (0x9E3779B9 * i)) % table_size
       result[i] = self.prime_table[i][idx0][idx1] ^ byte_signal ^ key_sum ^ (0x9E3779B9 * (i + 1))
     return result

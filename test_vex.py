@@ -4,6 +4,7 @@ from vex import Vex
 from ctypes import c_uint32
 import time
 import random
+from collections import Counter
 
 def test_init():
   vex = Vex(output_bits=256, key=b"test_key")
@@ -69,3 +70,30 @@ def test_map_data_preimage_resistance():
     data = bytes([i, j])
     result = vex.map_data(data)
     assert tuple(result) != tuple(target), "Preimage found unexpectedly"
+
+def test_map_data_quantum_resistance():
+  vex = Vex(output_bits=256, key=b"test_key")
+  outputs = set()
+  sample_size = 1000
+  for _ in range(sample_size):
+    i, j = random.randint(0, 255), random.randint(0, 255)
+    data = bytes([i, j])
+    result = vex.map_data(data)
+    outputs.add(tuple(result))
+  unique_ratio = len(outputs) / sample_size
+  assert unique_ratio >= 0.95, "High uniqueness indicates strong entropy (~2^256)"
+
+def test_map_data_non_uniformity():
+  vex = Vex(output_bits=256, key=b"test_key")
+  sample_size = 1000
+  bit_counts = Counter()
+  for _ in range(sample_size):
+    i, j = random.randint(0, 255), random.randint(0, 255)
+    data = bytes([i, j])
+    result = vex.map_data(data)
+    for word in result:
+      for bit in range(32):
+        bit_counts[bit] += (word >> bit) & 1
+  expected_count = sample_size * vex.output_size / 2
+  deviations = [abs(count - expected_count) / expected_count for count in bit_counts.values()]
+  assert any(dev > 0.1 for dev in deviations), "Output too uniform, expected bias for quantum resistance"
